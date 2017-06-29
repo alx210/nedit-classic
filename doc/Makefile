@@ -39,7 +39,10 @@ instructions:
 	
 .version:
 	@ if [ "$(VERSION)" = "" ]; then \
-	      echo "NEdit release of `date +'%b %e, %Y'`" > .version; \
+	      DATE_FMT="%Y-%m-%d" \
+	      SOURCE_DATE_EPOCH="$${SOURCE_DATE_EPOCH:-$$(date +%s)}" \
+	      BUILD_DATE=$$(date -u -d "@$$SOURCE_DATE_EPOCH" "+$$DATE_FMT" 2>/dev/null || date -u -r "$$SOURCE_DATE_EPOCH" "+$$DATE_FMT" 2>/dev/null || date -u "+$$DATE_FMT") \
+	      echo "NEdit release of $$BUILD_DATE" > .version; \
 	  else \
 	      echo "$(VERSION)" > .version; \
 	  fi

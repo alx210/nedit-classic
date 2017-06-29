@@ -711,7 +711,7 @@ sub date
 {
     $format = $_[0];
     
-    ( $sec,$min,$hour,$mday,$mon,$year,@ignore ) = localtime( time );
+    ( $sec,$min,$hour,$mday,$mon,$year,@ignore ) = localtime( $ENV{SOURCE_DATE_EPOCH} || time );
     $month = (January,February,March,April,May,June,July,
               August,September,October,November,December)[$mon];
     $year  = $year + 1900;
