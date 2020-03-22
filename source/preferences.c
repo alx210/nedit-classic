@@ -64,6 +64,7 @@
 #include <sys/stat.h>
 #ifdef VMS
 #include "../util/VMSparam.h"
+#include <inttypes.h>
 #else
 #ifndef __MVS__
 #include <sys/param.h>

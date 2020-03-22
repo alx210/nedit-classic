@@ -101,6 +101,9 @@ $   call COMPILE FONTSEL     libNUtil
 $   call COMPILE MANAGEDLIST libNUtil					  
 $   call COMPILE MOTIF       libNUtil					  
 $   call COMPILE UTILS	     libNUtil					  
+$   call COMPILE RBTREE      libNUtil
+$   call COMPILE NEDIT_MALLOC libNUtil
+$   call COMPILE REFSTRING   libNUtil
 $   call COMPILE VMSUTILS    vmsutils						  
 $   set def [-.microline.xml]
 $   if f$search("libXmL.OLB") .eqs. "" then library/create/object libXmL.olb
@@ -142,7 +145,6 @@ $   call COMPILE HIGHLIGHTDATA
 $   call COMPILE INTERPRET
 $   call COMPILE SMARTINDENT
 $   call COMPILE REGEXCONVERT
-$   call COMPILE RBTREE
 $   call COMPILE WINDOWTITLE
 $   call COMPILE LINKDATE
 $   call COMPILE CALLTIPS
@@ -158,7 +160,7 @@ $   OBJS :=	  nedit, file, menu, window, selection, search, undo, shift, -
     	  help, preferences, tags, userCmds, regularExp, macro, text, -
     	  textSel, textDisp, textBuf, textDrag, server, highlight, -
     	  highlightData, interpret, parse, smartIndent, regexconvert, -
-    	  rbTree, windowtitle, linkdate, calltips, rangeset, server_common
+    	  windowtitle, linkdate, calltips, rangeset, server_common
 
 $   LINK 'lopts' 'OBJS', NEDIT_OPTIONS_FILE/OPT, -
                           [-.microline.xml]libxml/lib, [-.xlt]libXlt/lib, -
