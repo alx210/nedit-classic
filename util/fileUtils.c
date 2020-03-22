@@ -93,6 +93,7 @@ ParseFilename(const char *fullname, char *filename, char *pathname)
 {
     int fullLen = strlen(fullname);
     int i, pathLen, fileLen;
+    int slash = 0;
 	    
 #ifdef VMS
     /* find the last ] or : */
@@ -132,7 +133,14 @@ ParseFilename(const char *fullname, char *filename, char *pathname)
       	if (fileLen >= MAXPATHLEN) {
       	    return 2;
       	}
-      	strncpy(filename, &fullname[pathLen], fileLen);
+        /* for some unknown reason, fullname coming from HandleCustomExistFileSB.fileString contains "/" between path and filename, e.g. "SYS$SYSROOT:[SYSMGR.NEDIT-5_7.MAKEFILES]/buildvms.com" on OpenVMS 8.4 AXP using C 7.3 */
+#ifdef VMS
+        if (fullname[pathLen] == '/') {
+            slash = 1;
+            fileLen--;
+        }
+#endif
+      	strncpy(filename, &fullname[pathLen + slash], fileLen);
       	filename[fileLen] = 0;
     }
 
