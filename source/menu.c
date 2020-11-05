@@ -226,6 +226,7 @@ static void openSelectedAP(Widget w, XEvent *event, String *args,
 	Cardinal *nArgs);
 static void closeAP(Widget w, XEvent *event, String *args, Cardinal *nArgs); 
 static void saveAP(Widget w, XEvent *event, String *args, Cardinal *nArgs); 
+static void saveAllAP(Widget w, XEvent *event, String *args, Cardinal *nArgs);
 static void saveAsDialogAP(Widget w, XEvent *event, String *args,
 	Cardinal *nArgs); 
 static void saveAsAP(Widget w, XEvent *event, String *args, Cardinal *nArgs); 
@@ -439,6 +440,8 @@ static XtActionsRec Actions[] = {
     {"open_selected", openSelectedAP},
     {"close", closeAP},
     {"save", saveAP},
+    {"save-all", saveAllAP },
+    {"save_all", saveAllAP },
     {"save-as", saveAsAP},
     {"save_as", saveAsAP},
     {"save-as-dialog", saveAsDialogAP},
@@ -680,6 +683,7 @@ Widget CreateMenuBar(Widget parent, WindowInfo *window)
     createMenuItem(menuPane, "save", "Save", 'S', doActionCB, "save", SHORT);
     createMenuItem(menuPane, "saveAs", "Save As...", 'A', doActionCB,
     	    "save_as_dialog", SHORT);
+    createMenuItem(menuPane, "saveAll", "Save All", 'l', doActionCB, "save-all", SHORT); 
     createMenuItem(menuPane, "revertToSaved", "Revert to Saved", 'R',
     	    doActionCB, "revert_to_saved_dialog", SHORT);
     createMenuSeparator(menuPane, "sep2", SHORT);
@@ -705,7 +709,7 @@ Widget CreateMenuBar(Widget parent, WindowInfo *window)
     createMenuItem(menuPane, "print", "Print...", 'P', doActionCB, "print",
     	    SHORT);
     window->printSelItem = createMenuItem(menuPane, "printSelection",
-    	    "Print Selection...", 'l', doActionCB, "print_selection",
+    	    "Print Selection...", 't', doActionCB, "print_selection",
     	    SHORT);
     XtSetSensitive(window->printSelItem, window->wasSelected);
     createMenuSeparator(menuPane, "sep4", SHORT);
@@ -2832,6 +2836,17 @@ static void saveAP(Widget w, XEvent *event, String *args, Cardinal *nArgs)
     if (CheckReadOnly(window))
     	return;
     SaveWindow(window);
+}
+
+static void saveAllAP(Widget w, XEvent *event, String *args, Cardinal *nArgs)
+{
+    WindowInfo *window;
+
+    for (window = WindowList; window != NULL; window = window->next) {
+        if (CheckReadOnly(window))
+            continue;
+        SaveWindow(window);
+    }
 }
 
 static void saveAsDialogAP(Widget w, XEvent *event, String *args,
