@@ -6,15 +6,15 @@ file.o: file.c file.h nedit.h textBuf.h text.h window.h preferences.h \
   ../util/utils.h
 help.o: help.c help.h help_topic.h textBuf.h text.h textP.h textDisp.h \
   textSel.h nedit.h search.h window.h preferences.h help_data.h file.h \
-  highlight.h ../util/misc.h ../util/DialogF.h ../util/system.h
+  highlight.h ../util/misc.h ../util/DialogF.h ../util/system.h font.h
 highlight.o: highlight.c highlight.h nedit.h textBuf.h textDisp.h text.h \
   textP.h regularExp.h highlightData.h preferences.h window.h \
-  ../util/misc.h ../util/DialogF.h
+  ../util/misc.h ../util/DialogF.h font.h
 highlightData.o: highlightData.c highlightData.h nedit.h textBuf.h \
   highlight.h regularExp.h preferences.h help.h help_topic.h window.h \
   regexConvert.h ../util/misc.h ../util/DialogF.h ../util/managedList.h
 interpret.o: interpret.c interpret.h nedit.h textBuf.h ../util/rbTree.h menu.h \
-  text.h
+  text.h font.h
 linkdate.o: linkdate.c
 macro.o: macro.c macro.h nedit.h textBuf.h text.h window.h preferences.h \
   interpret.h ../util/rbTree.h parse.h search.h server.h shell.h smartIndent.h \
@@ -31,7 +31,7 @@ nc.o: nc.c server_common.h ../util/fileUtils.h ../util/utils.h \
 nedit.o: nedit.c nedit.h textBuf.h file.h preferences.h regularExp.h \
   selection.h tags.h menu.h macro.h server.h window.h interpret.h \
   ../util/rbTree.h parse.h help.h help_topic.h ../util/misc.h \
-  ../util/printUtils.h ../util/fileUtils.h ../util/getfiles.h
+  ../util/printUtils.h ../util/fileUtils.h ../util/getfiles.h font.h
 parse_noyacc.o: parse_noyacc.c parse.h interpret.h nedit.h textBuf.h \
   ../util/rbTree.h
 preferences.o: preferences.c preferences.h nedit.h textBuf.h text.h \
@@ -39,7 +39,7 @@ preferences.o: preferences.c preferences.h nedit.h textBuf.h text.h \
   help_topic.h regularExp.h smartIndent.h windowTitle.h server.h tags.h \
   ../util/prefFile.h ../util/misc.h ../util/DialogF.h \
   ../util/managedList.h ../util/fontsel.h ../util/fileUtils.h \
-  ../util/utils.h ../util/clearcase.h
+  ../util/utils.h ../util/clearcase.h font.h
 rangeset.o: rangeset.c textBuf.h textDisp.h rangeset.h
 regexConvert.o: regexConvert.c regexConvert.h
 regularExp.o: regularExp.c regularExp.h
@@ -63,10 +63,10 @@ tags.o: tags.c tags.h nedit.h textBuf.h text.h window.h file.h \
   preferences.h search.h selection.h calltips.h textDisp.h \
   ../util/DialogF.h ../util/fileUtils.h ../util/misc.h ../util/utils.h
 text.o: text.c text.h textBuf.h textP.h textDisp.h textSel.h textDrag.h \
-  nedit.h calltips.h
+  nedit.h calltips.h font.h
 textBuf.o: textBuf.c textBuf.h rangeset.h
 textDisp.o: textDisp.c textDisp.h textBuf.h text.h textP.h nedit.h \
-  calltips.h highlight.h rangeset.h
+  calltips.h highlight.h rangeset.h font.h
 textDrag.o: textDrag.c textDrag.h text.h textBuf.h textDisp.h textP.h
 textSel.o: textSel.c textSel.h textP.h textBuf.h textDisp.h text.h
 undo.o: undo.c undo.h nedit.h textBuf.h text.h search.h window.h file.h \
@@ -78,8 +78,9 @@ window.o: window.c window.h nedit.h textBuf.h textSel.h text.h textDisp.h \
   textP.h menu.h file.h search.h undo.h preferences.h selection.h \
   server.h shell.h macro.h highlight.h smartIndent.h userCmds.h nedit.bm \
   n.bm windowTitle.h ../util/clearcase.h ../util/misc.h \
-  ../util/fileUtils.h ../util/utils.h
+  ../util/fileUtils.h ../util/utils.h font.h
 windowTitle.o: windowTitle.c windowTitle.h nedit.h textBuf.h \
   preferences.h help.h help_topic.h ../util/prefFile.h ../util/misc.h \
   ../util/DialogF.h ../util/utils.h ../util/fileUtils.h \
   ../util/clearcase.h
+font.o: font.c font.h

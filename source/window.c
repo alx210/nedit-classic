@@ -31,6 +31,7 @@
 #endif
 
 #include "window.h"
+#include "font.h"
 #include "textBuf.h"
 #include "textSel.h"
 #include "text.h"
@@ -300,7 +301,7 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
     strcpy(window->boldFontName, GetPrefBoldFontName());
     strcpy(window->boldItalicFontName, GetPrefBoldItalicFontName());
     window->colorDialog = NULL;
-    window->fontList = GetPrefFontList();
+    window->primFontStruct = GetPrefPrimFont();
     window->italicFontStruct = GetPrefItalicFont();
     window->boldFontStruct = GetPrefBoldFont();
     window->boldItalicFontStruct = GetPrefBoldItalicFont();
@@ -685,11 +686,6 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
     if(window->showStats)
         XtManageChild(window->statsLineForm);
     
-    /* If the fontList was NULL, use the magical default provided by Motif,
-       since it must have worked if we've gotten this far */
-    if (window->fontList == NULL)
-        XtVaGetValues(stats, XmNfontList, &window->fontList, NULL);
-
     /* Create the menu bar */
     menuBar = CreateMenuBar(mainWin, window);
     window->menuBar = menuBar;
@@ -710,6 +706,16 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
        recognize Caps Lock and Num Lock as modifiers, and don't trigger if
        they are engaged */ 
     AccelLockBugPatch(pane, window->menuBar);
+
+	/* In case we couldn't load primary font for the text area from
+	 * preferences, snarf Motif default from the stats widget */
+#ifndef USE_XRENDER
+	if(!window->primFontStruct) {
+		XmFontList fontList;
+		XtVaGetValues(stats, XmNfontList, &fontList, NULL);
+		window->primFontStruct = GetDefaultFontStruct(TheDisplay, fontList);
+	}
+#endif
 
     /* Create the first, and most permanent text area (other panes may
        be added & removed, but this one will never be removed */
@@ -978,9 +984,6 @@ void CloseWindow(WindowInfo *window)
        there can be more than one dialog. */
     RemoveFromMultiReplaceDialog(window);
     
-    /* Destroy the file closed property for this file */
-    DeleteFileClosedProperty(window);
-
     /* Remove any possibly pending callback which might fire after the 
        widget is gone. */
     cancelTimeOut(&window->flashTimeoutID);
@@ -1765,21 +1768,14 @@ void UpdateNewOppositeMenu(WindowInfo *window, int openInTab)
 
 /*
 ** Set the fonts for "window" from a font name, and updates the display.
-** Also updates window->fontList which is used for statistics line.
-**
-** Note that this leaks memory and server resources.  In previous NEdit
-** versions, fontLists were carefully tracked and freed, but X and Motif
-** have some kind of timing problem when widgets are distroyed, such that
-** fonts may not be freed immediately after widget destruction with 100%
-** safety.  Rather than kludge around this with timerProcs, I have chosen
-** to create new fontLists only when the user explicitly changes the font
-** (which shouldn't happen much in normal NEdit operation), and skip the
-** futile effort of freeing them.
+** XXX: This will leak resources, since we cannot unload any fonts, as these
+** may be used by existing editor instances. See also SetPref*Font in
+** preferences.c
 */
 void SetFonts(WindowInfo *window, const char *fontName, const char *italicName,
         const char *boldName, const char *boldItalicName)
 {
-    XFontStruct *font, *oldFont;
+    FontStruct *font, *oldFont;
     int i, oldFontWidth, oldFontHeight, fontWidth, fontHeight;
     int borderWidth, borderHeight, marginWidth, marginHeight;
     int primaryChanged, highlightChanged = False;
@@ -1814,37 +1810,38 @@ void SetFonts(WindowInfo *window, const char *fontName, const char *italicName,
     oldFontWidth = oldFont->max_bounds.width;
     oldFontHeight = textD->ascent + textD->descent;
     
-        
-    /* Change the fonts in the window data structure.  If the primary font
-       didn't work, use Motif's fallback mechanism by stealing it from the
-       statistics line.  Highlight fonts are allowed to be NULL, which
-       is interpreted as "use the primary font" */
     if (primaryChanged) {
-        strcpy(window->fontName, fontName);
-        font = XLoadQueryFont(TheDisplay, fontName);
-        if (font == NULL)
-            XtVaGetValues(window->statsLine, XmNfontList, &window->fontList,
-                    NULL);
-        else
-            window->fontList = XmFontListCreate(font, XmSTRING_DEFAULT_CHARSET);
-    }
-    if (highlightChanged) {
-        strcpy(window->italicFontName, italicName);
-        window->italicFontStruct = XLoadQueryFont(TheDisplay, italicName);
-        strcpy(window->boldFontName, boldName);
-        window->boldFontStruct = XLoadQueryFont(TheDisplay, boldName);
-        strcpy(window->boldItalicFontName, boldItalicName);
-        window->boldItalicFontStruct = XLoadQueryFont(TheDisplay, boldItalicName);
-    }
-
-    /* Change the primary font in all the widgets */
-    if (primaryChanged) {
-        font = GetDefaultFontStruct(TheDisplay, window->fontList);
-        XtVaSetValues(window->textArea, textNfont, font, NULL);
-        for (i=0; i<window->nPanes; i++)
-            XtVaSetValues(window->textPanes[i], textNfont, font, NULL);
+        font = LoadFont(fontName);
+        if(font){
+            strcpy(window->fontName, fontName);
+          
+            XtVaSetValues(window->textArea, textNfont, font, NULL);
+            for (i=0; i<window->nPanes; i++)
+                XtVaSetValues(window->textPanes[i], textNfont, font, NULL);
+            }
+            window->primFontStruct = font;
     }
     
+    if (highlightChanged) {
+        font = LoadFont(italicName);
+        if(font) {
+            window->italicFontStruct = font;
+            strcpy(window->italicFontName, italicName);
+        }
+        
+        font = LoadFont(boldName);
+        if(font) {
+            window->boldFontStruct = font;
+            strcpy(window->boldFontName, boldName);
+        }
+        
+        font = LoadFont(boldItalicName);
+        if(font) {
+            window->boldItalicFontStruct = font;
+            strcpy(window->boldItalicFontName, boldItalicName);
+        }
+    }
+
     /* Change the highlight fonts, even if they didn't change, because
        primary font is read through the style table for syntax highlighting */
     if (window->highlightData != NULL)
@@ -1861,7 +1858,7 @@ void SetFonts(WindowInfo *window, const char *fontName, const char *italicName,
        size appropriate for the new font, but only do so if there's only
        _one_ document in the window, in order to avoid growing-window bug */
     if (NDocuments(window) == 1) {
-	fontWidth = GetDefaultFontStruct(TheDisplay, window->fontList)->max_bounds.width;
+	fontWidth = window->primFontStruct->max_bounds.width;
 	fontHeight = textD->ascent + textD->descent;
 	newWindowWidth = (oldTextWidth*fontWidth) / oldFontWidth + borderWidth;
 	newWindowHeight = (oldTextHeight*fontHeight) / oldFontHeight + 
@@ -2244,7 +2241,7 @@ static Widget createTextArea(Widget parent, WindowInfo *window, int rows,
             textNrows, rows, textNcolumns, cols,
             textNlineNumCols, lineNumCols,
             textNemulateTabs, emTabDist,
-            textNfont, GetDefaultFontStruct(TheDisplay, window->fontList),
+            textNfont, window->primFontStruct,
             textNhScrollBar, hScrollBar, textNvScrollBar, vScrollBar,
             textNreadOnly, IS_ANY_LOCKED(window->lockReasons),
             textNwordDelimiters, delimiters,
@@ -2635,7 +2632,7 @@ static int updateGutterWidth(WindowInfo* window)
     }
 
     if (reqCols != maxCols) {
-        XFontStruct *fs;
+        FontStruct *fs;
         Dimension windowWidth;
         short fontWidth;
 
@@ -2864,7 +2861,7 @@ void UpdateWMSizeHints(WindowInfo *window)
 {
     Dimension shellWidth, shellHeight, textHeight, hScrollBarHeight;
     int marginHeight, marginWidth, totalHeight, nCols, nRows;
-    XFontStruct *fs;
+    FontStruct *fs;
     int i, baseWidth, baseHeight, fontHeight, fontWidth;
     Widget hScrollBar;
     textDisp *textD = ((TextWidget)window->textArea)->text.textD;
@@ -3333,7 +3330,6 @@ WindowInfo* CreateDocument(WindowInfo* shellWindow, const char* name)
     strcpy(window->boldFontName, GetPrefBoldFontName());
     strcpy(window->boldItalicFontName, GetPrefBoldItalicFontName());
     window->colorDialog = NULL;
-    window->fontList = GetPrefFontList();
     window->italicFontStruct = GetPrefItalicFont();
     window->boldFontStruct = GetPrefBoldFont();
     window->boldItalicFontStruct = GetPrefBoldItalicFont();
@@ -3358,10 +3354,6 @@ WindowInfo* CreateDocument(WindowInfo* shellWindow, const char* name)
     window->bgMenuRedoItem = NULL;
     window->device = 0;
     window->inode = 0;
-
-    if (window->fontList == NULL)
-        XtVaGetValues(shellWindow->statsLine, XmNfontList, 
-    	    	&window->fontList,NULL);
 
     getTextPaneDimension(shellWindow, &nRows, &nCols);
     

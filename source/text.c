@@ -28,6 +28,7 @@
 #include "../config.h"
 #endif
 
+#include "font.h"
 #include "text.h"
 #include "textP.h"
 #include "textBuf.h"
@@ -617,8 +618,8 @@ static XtResource resources[] = {
       XmRInt, 0},
     {XmNshadowThickness, XmCShadowThickness, XmRDimension, sizeof(Dimension),
       XtOffset(TextWidget, primitive.shadow_thickness), XmRInt, 0},
-    {textNfont, textCFont, XmRFontStruct, sizeof(XFontStruct *),
-      XtOffset(TextWidget, text.fontStruct), XmRString, "fixed"},
+    {textNfont, textCFont, textRFontStruct, sizeof(FontStruct *),
+      XtOffset(TextWidget, text.fontStruct), XmRImmediate, NULL},
     {textNselectForeground, textCSelectForeground, XmRPixel, sizeof(Pixel),
       XtOffset(TextWidget, text.selectFGPixel), XmRString, 
       NEDIT_DEFAULT_SEL_FG},
@@ -773,7 +774,7 @@ static Cursor empty_cursor = 0;
 */
 static void initialize(TextWidget request, TextWidget new)
 {
-    XFontStruct *fs = new->text.fontStruct;
+    FontStruct *fs = new->text.fontStruct;
     char *delimiters;
     textBuffer *buf;
     Pixel white, black;
@@ -793,7 +794,7 @@ static void initialize(TextWidget request, TextWidget new)
     if (request->core.height == 0)
    	new->core.height = (fs->ascent + fs->descent) * new->text.rows +
    		new->text.marginHeight * 2;
-    
+
     /* The default colors work for B&W as well as color, except for
        selectFGPixel and selectBGPixel, where color highlighting looks
        much better without reverse video, so if we get here, and the
@@ -808,7 +809,7 @@ static void initialize(TextWidget request, TextWidget new)
     	new->text.selectBGPixel = black;
     	new->text.selectFGPixel = white;
     }
-    
+
     /* Create the initial text buffer for the widget to display (which can
        be replaced later with TextSetBuffer) */
     buf = BufCreate();
@@ -969,7 +970,7 @@ static void destroy(TextWidget w)
 */
 static void resize(TextWidget w)
 {
-    XFontStruct *fs = w->text.fontStruct;
+    FontStruct *fs = w->text.fontStruct;
     int height = w->core.height, width = w->core.width;
     int marginWidth = w->text.marginWidth, marginHeight = w->text.marginHeight;
     int lineNumAreaWidth = w->text.lineNumCols == 0 ? 0 : w->text.marginWidth +
@@ -1106,7 +1107,12 @@ static Boolean setValues(TextWidget current, TextWidget request,
 	TextWidget new)
 {
     Boolean redraw = False, reconfigure = False;
-    
+
+    if (new->text.fontStruct != current->text.fontStruct) {
+		if (new->text.lineNumCols != 0) reconfigure = True;
+    	TextDSetFont(current->text.textD, new->text.fontStruct);
+    }    
+
     if (new->text.overstrike != current->text.overstrike) {
     	if (current->text.textD->cursorStyle == BLOCK_CURSOR)
     	    TextDSetCursorStyle(current->text.textD,
@@ -1114,12 +1120,6 @@ static Boolean setValues(TextWidget current, TextWidget request,
     	else if (current->text.textD->cursorStyle == NORMAL_CURSOR ||
     		current->text.textD->cursorStyle == HEAVY_CURSOR)
     	    TextDSetCursorStyle(current->text.textD, BLOCK_CURSOR);
-    }
-    
-    if (new->text.fontStruct != current->text.fontStruct) {
-	if (new->text.lineNumCols != 0)
-	    reconfigure = True;
-    	TextDSetFont(current->text.textD, new->text.fontStruct);
     }
     
     if (new->text.wrapMargin != current->text.wrapMargin ||
@@ -1196,7 +1196,7 @@ static XtGeometryResult queryGeometry(Widget w, XtWidgetGeometry *proposed,
     
     int curHeight = tw->core.height;
     int curWidth = tw->core.width;
-    XFontStruct *fs = tw->text.textD->fontStruct;
+    FontStruct *fs = tw->text.textD->fontStruct;
     int fontWidth = fs->max_bounds.width;
     int fontHeight = fs->ascent + fs->descent;
     int marginHeight = tw->text.marginHeight;

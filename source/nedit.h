@@ -27,6 +27,7 @@
 #ifndef NEDIT_NEDIT_H_INCLUDED
 #define NEDIT_NEDIT_H_INCLUDED
 
+#include "font.h"
 #include "textBuf.h"
 #include <sys/types.h>
 
@@ -476,10 +477,11 @@ typedef struct _WindowInfo {
     char	italicFontName[MAX_FONT_LEN];
     char	boldFontName[MAX_FONT_LEN];
     char	boldItalicFontName[MAX_FONT_LEN];
-    XmFontList	fontList;		/* fontList for the primary font */
-    XFontStruct *italicFontStruct;	/* fontStructs for highlighting fonts */
-    XFontStruct *boldFontStruct;
-    XFontStruct *boldItalicFontStruct;
+
+    FontStruct *primFontStruct;
+    FontStruct *italicFontStruct;	/* fontStructs for highlighting fonts */
+    FontStruct *boldFontStruct;
+    FontStruct *boldItalicFontStruct;
     XtIntervalId flashTimeoutID;	/* timer procedure id for getting rid
     					   of highlighted matching paren.  Non-
     					   zero val. means highlight is drawn */
@@ -561,6 +563,9 @@ typedef struct _WindowInfo {
 extern WindowInfo *WindowList;
 extern Display *TheDisplay;
 extern Widget TheAppShell;
+extern Visual *TheVisual;
+extern Colormap TheColormap;
+extern int TheScreen;
 extern char *ArgV0;
 extern Boolean IsServer;
 

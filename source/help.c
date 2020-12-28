@@ -377,21 +377,26 @@ static void initHelpStyles (Widget parent)
 */
 static void loadFontsAndColors(Widget parent, int style)
 {
-    XFontStruct *font;
+    FontStruct *font;
     int r,g,b;
+    #ifdef USE_XRENDER
+    const char fallback[]="Sans-10";
+    #else
+    const char fallback[]="fixed";
+    #endif
+	
     if (HelpStyleInfo[STYLE_INDEX(style)].font == NULL)
     {
-        font = XLoadQueryFont(XtDisplay(parent),
-                GetPrefHelpFontName(StyleFonts[STYLE_INDEX(style)]));
+        font = LoadFont(GetPrefHelpFontName(StyleFonts[STYLE_INDEX(style)]));
         if (font == NULL)
         {
             fprintf(stderr, "NEdit: help font, %s, not available\n",
                     GetPrefHelpFontName(StyleFonts[STYLE_INDEX(style)]));
-            font = XLoadQueryFont(XtDisplay(parent), "fixed");
+            font = LoadFont(fallback);
             if (font == NULL)
             {
-                fprintf(stderr, "NEdit: fallback help font, \"fixed\", not "
-                        "available, cannot continue\n");
+                fprintf(stderr, "NEdit: fallback help font, \"%s\", not "
+                        "available, cannot continue\n", fallback);
                 exit(EXIT_FAILURE);
             }
         }

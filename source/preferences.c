@@ -30,6 +30,7 @@
 #include "../config.h"
 #endif
 
+#include "font.h"
 #include "preferences.h"
 #include "textBuf.h"
 #include "nedit.h"
@@ -287,10 +288,10 @@ static struct prefData {
     char boldFontString[MAX_FONT_LEN];
     char italicFontString[MAX_FONT_LEN];
     char boldItalicFontString[MAX_FONT_LEN];
-    XmFontList fontList;	/* XmFontLists corresp. to above named fonts */
-    XFontStruct *boldFontStruct;
-    XFontStruct *italicFontStruct;
-    XFontStruct *boldItalicFontStruct;
+    FontStruct *primFontStruct;
+	FontStruct *boldFontStruct;
+    FontStruct *italicFontStruct;
+    FontStruct *boldItalicFontStruct;
     int sortTabs;		/* sort tabs alphabetically */
     int repositionDialogs;	/* w. to reposition dialogs under the pointer */
     int autoScroll;             /* w. to autoscroll near top/bottom of screen */
@@ -933,6 +934,70 @@ static PrefDescripRec PrefDescrip[] = {
     	&PrefData.emTabDist, NULL, True},
     {"insertTabs", "InsertTabs", PREF_BOOLEAN, "True",
     	&PrefData.insertTabs, NULL, True},
+#ifdef USE_XRENDER
+    {"textFont", "TextFont", PREF_STRING,
+    	"Monospace-10",
+    	PrefData.fontString, (void *)sizeof(PrefData.fontString), True},
+    {"boldHighlightFont", "BoldHighlightFont", PREF_STRING,
+    	"Monospace-10:Bold",
+    	PrefData.boldFontString, (void *)sizeof(PrefData.boldFontString), True},
+    {"italicHighlightFont", "ItalicHighlightFont", PREF_STRING,
+    	"Monospace-10:Italic",
+    	PrefData.italicFontString,
+    	(void *)sizeof(PrefData.italicFontString), True},
+    {"boldItalicHighlightFont", "BoldItalicHighlightFont", PREF_STRING,
+    	"Monospace-10:Bold:Italic",
+    	PrefData.boldItalicFontString,
+    	(void *)sizeof(PrefData.boldItalicFontString), True},
+    {"helpFont", "HelpFont", PREF_STRING,
+    	"Sans-10",
+	PrefData.helpFontNames[HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[HELP_FONT]), False},
+    {"boldHelpFont", "BoldHelpFont", PREF_STRING,
+    	"Sans-10:Bold",
+	PrefData.helpFontNames[BOLD_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[BOLD_HELP_FONT]), False},
+    {"italicHelpFont", "ItalicHelpFont", PREF_STRING,
+    	"Sans-10:Italic",
+	PrefData.helpFontNames[ITALIC_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[ITALIC_HELP_FONT]), False},
+    {"boldItalicHelpFont", "BoldItalicHelpFont", PREF_STRING,
+    	"Sans-10:Bold:Italic",
+	PrefData.helpFontNames[BOLD_ITALIC_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[BOLD_ITALIC_HELP_FONT]), False},
+    {"fixedHelpFont", "FixedHelpFont", PREF_STRING,
+    	"Monospace-10",
+	PrefData.helpFontNames[FIXED_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[FIXED_HELP_FONT]), False},
+    {"boldFixedHelpFont", "BoldFixedHelpFont", PREF_STRING,
+    	"Monospace-10:Bold",
+	PrefData.helpFontNames[BOLD_FIXED_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[BOLD_FIXED_HELP_FONT]), False},
+    {"italicFixedHelpFont", "ItalicFixedHelpFont", PREF_STRING,
+    	"Monospace-10:Italic",
+	PrefData.helpFontNames[ITALIC_FIXED_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[ITALIC_FIXED_HELP_FONT]), False},
+    {"boldItalicFixedHelpFont", "BoldItalicFixedHelpFont", PREF_STRING,
+    	"Monospace-10:Bold:Italic",
+	PrefData.helpFontNames[BOLD_ITALIC_FIXED_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[BOLD_ITALIC_FIXED_HELP_FONT]), False},
+    {"helpLinkFont", "HelpLinkFont", PREF_STRING,
+    	"Sans-10",
+	PrefData.helpFontNames[HELP_LINK_FONT],
+	(void *)sizeof(PrefData.helpFontNames[HELP_LINK_FONT]), False},
+    {"h1HelpFont", "H1HelpFont", PREF_STRING,
+    	"Sans-14:Bold",
+	PrefData.helpFontNames[H1_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[H1_HELP_FONT]), False},
+    {"h2HelpFont", "H2HelpFont", PREF_STRING,
+    	"Sans-12:Bold",
+	PrefData.helpFontNames[H2_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[H2_HELP_FONT]), False},
+    {"h3HelpFont", "H3HelpFont", PREF_STRING,
+    	"Sans-10:Bold",
+	PrefData.helpFontNames[H3_HELP_FONT],
+	(void *)sizeof(PrefData.helpFontNames[H3_HELP_FONT]), False},
+#else /* !USE_XRENDER */
     {"textFont", "TextFont", PREF_STRING,
     	"-*-courier-medium-r-normal--14-*-*-*-*-iso8859-1",
     	PrefData.fontString, (void *)sizeof(PrefData.fontString), True},
@@ -995,6 +1060,7 @@ static PrefDescripRec PrefDescrip[] = {
     	"-*-courier-bold-r-normal--14-*-*-*-*-iso8859-1",
 	PrefData.helpFontNames[H3_HELP_FONT],
 	(void *)sizeof(PrefData.helpFontNames[H3_HELP_FONT]), False},
+#endif /* USE_XRENDER */
     {"helpLinkColor", "HelpLinkColor", PREF_STRING, "#009900",
 	PrefData.helpLinkColor,
 	(void *)sizeof(PrefData.helpLinkColor), False},
@@ -1353,7 +1419,7 @@ void RestoreNEditPrefs(XrmDatabase prefDB, XrmDatabase appDB)
 */
 static void translatePrefFormats(int convertOld, int fileVer)
 {
-    XFontStruct *font;
+    FontStruct *font;
 
     /* Parse the strings which represent types which are not decoded by
        the standard resource manager routines */
@@ -1399,17 +1465,11 @@ static void translatePrefFormats(int convertOld, int fileVer)
 	NEditFree(TempStringPrefs.smartIndentCommon);
 	TempStringPrefs.smartIndentCommon = NULL;
     }
-    
-    /* translate the font names into fontLists suitable for the text widget */
-    font = XLoadQueryFont(TheDisplay, PrefData.fontString);
-    PrefData.fontList = font==NULL ? NULL :
-	    XmFontListCreate(font, XmSTRING_DEFAULT_CHARSET);
-    PrefData.boldFontStruct = XLoadQueryFont(TheDisplay,
-    	    PrefData.boldFontString);
-    PrefData.italicFontStruct = XLoadQueryFont(TheDisplay,
-    	    PrefData.italicFontString);
-    PrefData.boldItalicFontStruct = XLoadQueryFont(TheDisplay,
-    	    PrefData.boldItalicFontString);
+	
+    PrefData.primFontStruct = LoadFont(PrefData.fontString);
+	PrefData.boldFontStruct = LoadFont(PrefData.boldFontString);
+    PrefData.italicFontStruct = LoadFont(PrefData.italicFontString);
+    PrefData.boldItalicFontStruct = LoadFont(PrefData.boldItalicFontString);
 
     /*
     **  The default set for the comand shell in PrefDescrip ("DEFAULT") is
@@ -2008,36 +2068,33 @@ void SetPrefColorName(int index, const char *name)
 }
 
 /*
-** Set the font preferences using the font name (the fontList is generated
-** in this call).  Note that this leaks memory and server resources each
-** time the default font is re-set.  See note on SetFontByName in window.c
-** for more information.
+** Set the font preferences using the font name.
+** XXX: This will leak resources, since we cannot unload any fonts, as these
+** may be used by existing editor instances. See also: SetFonts in window.c
 */
 void SetPrefFont(char *fontName)
 {
     XFontStruct *font;
-    
+
     setStringPref(PrefData.fontString, fontName);
-    font = XLoadQueryFont(TheDisplay, fontName);
-    PrefData.fontList = font==NULL ? NULL :
-	    XmFontListCreate(font, XmSTRING_DEFAULT_CHARSET);
+	PrefData.primFontStruct = LoadFont(fontName);
 }
 
 void SetPrefBoldFont(char *fontName)
 {
     setStringPref(PrefData.boldFontString, fontName);
-    PrefData.boldFontStruct = XLoadQueryFont(TheDisplay, fontName);
+    PrefData.boldFontStruct = LoadFont(fontName);
 }
 
 void SetPrefItalicFont(char *fontName)
 {
     setStringPref(PrefData.italicFontString, fontName);
-    PrefData.italicFontStruct = XLoadQueryFont(TheDisplay, fontName);
+    PrefData.italicFontStruct = LoadFont(fontName);
 }
 void SetPrefBoldItalicFont(char *fontName)
 {
     setStringPref(PrefData.boldItalicFontString, fontName);
-    PrefData.boldItalicFontStruct = XLoadQueryFont(TheDisplay, fontName);
+    PrefData.boldItalicFontStruct = LoadFont(fontName);
 }
 
 char *GetPrefFontName(void)
@@ -2060,22 +2117,22 @@ char *GetPrefBoldItalicFontName(void)
     return PrefData.boldItalicFontString;
 }
 
-XmFontList GetPrefFontList(void)
+FontStruct *GetPrefPrimFont(void)
 {
-    return PrefData.fontList;
+	return PrefData.primFontStruct;
 }
 
-XFontStruct *GetPrefBoldFont(void)
+FontStruct *GetPrefBoldFont(void)
 {
     return PrefData.boldFontStruct;
 }
 
-XFontStruct *GetPrefItalicFont(void)
+FontStruct *GetPrefItalicFont(void)
 {
     return PrefData.italicFontStruct;
 }
 
-XFontStruct *GetPrefBoldItalicFont(void)
+FontStruct *GetPrefBoldItalicFont(void)
 {
     return PrefData.boldItalicFontStruct;
 }
@@ -4118,6 +4175,13 @@ void ChooseFonts(WindowInfo *window, int forWindow)
     XtVaSetValues(form, XmNdefaultButton, okBtn, NULL);
     XtVaSetValues(form, XmNcancelButton, cancelBtn, NULL);
     
+#ifdef USE_XRENDER
+    XtSetSensitive(primaryBtn,False);
+    XtSetSensitive(boldBtn,False);
+    XtSetSensitive(italicBtn,False);
+    XtSetSensitive(boldItalicBtn,False);
+#endif
+
     /* Set initial values */
     if (forWindow) {
 	XmTextSetString(fd->primaryW, window->fontName);
@@ -4144,6 +4208,16 @@ static void fillFromPrimaryCB(Widget w, XtPointer clientData,
     fontDialog *fd = (fontDialog *)clientData;
     char *primaryName, *errMsg;
     char modifiedFontName[MAX_FONT_LEN];
+#ifdef USE_XRENDER
+    primaryName = XmTextGetString(fd->primaryW);
+	snprintf(modifiedFontName,MAX_FONT_LEN,"%s:%s",primaryName,"Italic");
+    XmTextSetString(fd->italicW, modifiedFontName);
+	snprintf(modifiedFontName,MAX_FONT_LEN,"%s:%s",primaryName,"Bold");
+    XmTextSetString(fd->boldW, modifiedFontName);
+	snprintf(modifiedFontName,MAX_FONT_LEN,"%s:%s",primaryName,"Bold:Italic");
+	XmTextSetString(fd->boldItalicW, modifiedFontName);
+    NEditFree(primaryName);
+#else /* USE_XRENDER */
     char *searchString = "(-[^-]*-[^-]*)-([^-]*)-([^-]*)-(.*)";
     char *italicReplaceString = "\\1-\\2-o-\\4";
     char *boldReplaceString = "\\1-bold-\\3-\\4";
@@ -4173,6 +4247,7 @@ static void fillFromPrimaryCB(Widget w, XtPointer clientData,
     XmTextSetString(fd->boldItalicW, modifiedFontName);
     NEditFree(primaryName);
     NEditFree(compiledRE);
+#endif /* USE_XRENDER */
 }
 
 static void primaryModifiedCB(Widget w, XtPointer clientData,
@@ -4270,7 +4345,7 @@ static void fontCancelCB(Widget w, XtPointer clientData, XtPointer callData)
 static int checkFontStatus(fontDialog *fd, Widget fontTextFieldW)
 {
     char *primaryName, *testName;
-    XFontStruct *primaryFont, *testFont;
+    FontStruct *primaryFont, *testFont;
     Display *display = XtDisplay(fontTextFieldW);
     int primaryWidth, primaryHeight, testWidth, testHeight;
     
@@ -4282,7 +4357,7 @@ static int checkFontStatus(fontDialog *fd, Widget fontTextFieldW)
 	NEditFree(testName);
     	return BAD_FONT;
     }
-    testFont = XLoadQueryFont(display, testName);
+    testFont = LoadFont(testName);
     if (testFont == NULL) {
     	NEditFree(testName);
     	return BAD_FONT;
@@ -4290,7 +4365,7 @@ static int checkFontStatus(fontDialog *fd, Widget fontTextFieldW)
     NEditFree(testName);
     testWidth = testFont->min_bounds.width;
     testHeight = testFont->ascent + testFont->descent;
-    XFreeFont(display, testFont);
+    UnloadFont(testFont);
     
     /* Get width and height of the primary font */
     primaryName = XmTextGetString(fd->primaryW);
@@ -4298,7 +4373,7 @@ static int checkFontStatus(fontDialog *fd, Widget fontTextFieldW)
 	NEditFree(primaryName);
     	return BAD_FONT;
     }
-    primaryFont = XLoadQueryFont(display, primaryName);
+    primaryFont = LoadFont(primaryName);
     if (primaryFont == NULL) {
     	NEditFree(primaryName);
     	return BAD_PRIMARY;
@@ -4306,7 +4381,7 @@ static int checkFontStatus(fontDialog *fd, Widget fontTextFieldW)
     NEditFree(primaryName);
     primaryWidth = primaryFont->min_bounds.width;
     primaryHeight = primaryFont->ascent + primaryFont->descent;
-    XFreeFont(display, primaryFont);
+    UnloadFont(primaryFont);
     
     /* Compare font information */
     if (testWidth != primaryWidth)

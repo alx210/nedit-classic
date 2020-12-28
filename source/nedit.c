@@ -108,6 +108,9 @@ static void showWarningFilter(String);
 
 WindowInfo *WindowList = NULL;
 Display *TheDisplay = NULL;
+Visual *TheVisual = NULL;
+Colormap TheColormap = None;
+int TheScreen = 0;
 char *ArgV0 = NULL;
 Boolean IsServer = False;
 Widget TheAppShell;
@@ -415,7 +418,8 @@ int main(int argc, char **argv)
             "-g", "-rv", "-reverse", "-bd", "-bordercolor", "-borderwidth",
 	    "-bw", "-title", NULL};
     unsigned char* invalidBindings = NULL;
-
+	Screen *screen;
+	
     /* Warn user if this has been compiled wrong. */
     enum MotifStability stability = GetMotifStability();
 
@@ -530,6 +534,10 @@ int main(int argc, char **argv)
                                          NULL,
                                          0);
     
+    XtVaGetValues(TheAppShell, XmNvisual, &TheVisual,
+        XmNcolormap, &TheColormap, XmNscreen, &screen, NULL);
+    TheScreen = XScreenNumberOfScreen(screen);
+	
     /* Restore the original bindings ASAP such that other apps are not affected. */
     restoreInsaneVirtualKeyBindings(invalidBindings);
 

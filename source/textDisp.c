@@ -30,6 +30,7 @@
 #include "../config.h"
 #endif
 
+#include "font.h"
 #include "textDisp.h"
 #include "textBuf.h"
 #include "text.h"
@@ -147,11 +148,11 @@ static int countLines(const char *string);
 static int measureVisLine(textDisp *textD, int visLineNum);
 static int emptyLinesVisible(textDisp *textD);
 static void blankCursorProtrusions(textDisp *textD);
-static void allocateFixedFontGCs(textDisp *textD, XFontStruct *fontStruct,
+static void allocateFixedFontGCs(textDisp *textD, FontStruct *fontStruct,
         Pixel bgPixel, Pixel fgPixel, Pixel selectFGPixel, Pixel selectBGPixel,
         Pixel highlightFGPixel, Pixel highlightBGPixel, Pixel lineNumFGPixel);
 static GC allocateGC(Widget w, unsigned long valueMask,
-        unsigned long foreground, unsigned long background, Font font,
+        unsigned long foreground, unsigned long background, FontStruct *font,
         unsigned long dynamicMask, unsigned long dontCareMask);
 static void releaseGC(Widget w, GC gc);
 static void resetClipRectangles(textDisp *textD);
@@ -179,11 +180,16 @@ static int measurePropChar(const textDisp* textD, char c,
 static Pixel allocBGColor(Widget w, char *colorName, int *ok);
 static Pixel getRangesetColor(textDisp *textD, int ind, Pixel bground);
 static void textDRedisplayRange(textDisp *textD, int start, int end);
+static int textWidth(FontStruct *fs, const char *string, int length);
+#ifdef USE_XRENDER
+static void initXft(Widget w, XtPointer data,
+        XEvent *event, Boolean *continue_to_dispatch);
+#endif /* USE_XRENDER */
 
 textDisp *TextDCreate(Widget widget, Widget hScrollBar, Widget vScrollBar,
         Position left, Position top, Position width, Position height,
         Position lineNumLeft, Position lineNumWidth, textBuffer *buffer,
-        XFontStruct *fontStruct, Pixel bgPixel, Pixel fgPixel,
+        FontStruct *fontStruct, Pixel bgPixel, Pixel fgPixel,
         Pixel selectFGPixel, Pixel selectBGPixel, Pixel highlightFGPixel,
         Pixel highlightBGPixel, Pixel cursorFGPixel, Pixel lineNumFGPixel,
         int continuousWrap, int wrapMargin, XmString bgClassString,
@@ -237,7 +243,7 @@ textDisp *TextDCreate(Widget widget, Widget hScrollBar, Widget vScrollBar,
     textD->continuousWrap = continuousWrap;
     allocateFixedFontGCs(textD, fontStruct, bgPixel, fgPixel, selectFGPixel,
             selectBGPixel, highlightFGPixel, highlightBGPixel, lineNumFGPixel);
-    textD->styleGC = allocateGC(textD->w, 0, 0, 0, fontStruct->fid,
+    textD->styleGC = allocateGC(textD->w, 0, 0, 0, fontStruct,
             GCClipMask|GCForeground|GCBackground, GCArcMode);
     textD->lineNumLeft = lineNumLeft;
     textD->lineNumWidth = lineNumWidth;
@@ -262,7 +268,9 @@ textDisp *TextDCreate(Widget widget, Widget hScrollBar, Widget vScrollBar,
     textD->modifyingTabDist = 0;
     textD->pointerHidden = False;
     textD->graphicsExposeQueue = NULL;
-
+#ifdef USE_XRENDER
+    textD->xftDraw = NULL;
+#endif
     /* Attach an event handler to the widget so we can know the visibility
        (used for choosing the fastest drawing method) */
     XtAddEventHandler(widget, VisibilityChangeMask, False,
@@ -299,8 +307,34 @@ textDisp *TextDCreate(Widget widget, Widget hScrollBar, Widget vScrollBar,
     /* Decide if the horizontal scroll bar needs to be visible */
     hideOrShowHScrollBar(textD);
 
+#ifdef USE_XRENDER
+    XtAddEventHandler(widget, StructureNotifyMask,
+        True, initXft, (XtPointer) textD);
+#endif /* USE_XRENDER */
+
     return textD;
 }
+
+/*
+ * Wait for a MapNotify event so we can create an XftDraw,
+ * since it wants a valid X Window handle.
+ */
+#ifdef USE_XRENDER
+static void initXft(Widget w, XtPointer data,
+        XEvent *event, Boolean *continue_to_dispatch) {
+	textDisp *textD = (textDisp*) data;
+
+	if(event->type == MapNotify) {
+    	textD->xftDraw = XftDrawCreate(TheDisplay,
+            event->xany.window, TheVisual, TheColormap);
+        XtRemoveEventHandler(textD->w,
+            StructureNotifyMask, True, initXft, textD);
+        TextDRedisplayRect(textD, textD->left, textD->top, textD->width,
+                textD->height);
+        redrawLineNumbers(textD, True);
+    }
+}
+#endif /* USE_XRENDER */
 
 /*
 ** Free a text display and release its associated memory.  Note, the text
@@ -323,6 +357,9 @@ void TextDFree(textDisp *textD)
     }
     NEditFree(textD->bgClassPixel);
     NEditFree(textD->bgClass);
+#ifdef USE_XRENDER
+    if(textD->xftDraw) XftDrawDestroy(textD->xftDraw);
+#endif /* USE_XRENDER */    
     NEditFree(textD);
 }
 
@@ -419,7 +456,7 @@ void TextDSetColors(textDisp *textD, Pixel textFgP, Pixel textBgP,
 /*
 ** Change the (non highlight) font
 */
-void TextDSetFont(textDisp *textD, XFontStruct *fontStruct)
+void TextDSetFont(textDisp *textD, FontStruct *fontStruct)
 {
     Display *display = XtDisplay(textD->w);
     int i, maxAscent = fontStruct->ascent, maxDescent = fontStruct->descent;
@@ -427,7 +464,7 @@ void TextDSetFont(textDisp *textD, XFontStruct *fontStruct)
     Pixel bgPixel, fgPixel, selectFGPixel, selectBGPixel;
     Pixel highlightFGPixel, highlightBGPixel, lineNumFGPixel;
     XGCValues values;
-    XFontStruct *styleFont;
+    FontStruct *styleFont;
     
     /* If font size changes, cursor will be redrawn in a new position */
     blankCursorProtrusions(textD);
@@ -487,7 +524,10 @@ void TextDSetFont(textDisp *textD, XFontStruct *fontStruct)
     releaseGC(textD->w, textD->lineNumGC);
     allocateFixedFontGCs(textD, fontStruct, bgPixel, fgPixel, selectFGPixel,
             selectBGPixel, highlightFGPixel, highlightBGPixel, lineNumFGPixel);
+    
+    #ifndef USE_XRENDER 
     XSetFont(display, textD->styleGC, fontStruct->fid);
+    #endif /* USE_XRENDER */
     
     /* Do a full resize to force recalculation of font related parameters */
     width = textD->width;
@@ -1947,11 +1987,21 @@ static void drawString(textDisp *textD, int style, int x, int y, int toX,
 {
     GC gc, bgGC;
     XGCValues gcValues;
-    XFontStruct *fs = textD->fontStruct;
+    FontStruct *fs = textD->fontStruct;
     Pixel bground = textD->bgPixel;
     Pixel fground = textD->fgPixel;
     int underlineStyle = FALSE;
+    Display *display = XtDisplay(textD->w);
+    Window window = XtWindow(textD->w);
+    #ifdef USE_XRENDER
+    XColor xc;
+    XftColor bg, fg;
+    XGlyphInfo ext;
+    XRectangle clip;
     
+    if(!textD->xftDraw) return;
+    #endif /* USE_XRENDER */
+	
     /* Don't draw if widget isn't realized */
     if (XtWindow(textD->w) == 0)
     	return;
@@ -1983,13 +2033,17 @@ static void drawString(textDisp *textD, int style, int x, int y, int toX,
             styleRec = &textD->styleTable[(style & STYLE_LOOKUP_MASK) - ASCII_A];
             underlineStyle = styleRec->underline;
             fs = styleRec->font;
+            #ifndef USE_XRENDER
             gcValues.font = fs->fid;
+            #endif
             fground = styleRec->color;
             /* here you could pick up specific select and highlight fground */
         }
         else {
             styleRec = NULL;
+            #ifndef USE_XRENDER
             gcValues.font = fs->fid;
+            #endif
             fground = textD->fgPixel;
         }
         /* Background color priority order is:
@@ -2011,8 +2065,12 @@ static void drawString(textDisp *textD, int style, int x, int y, int toX,
             fground = textD->bgPixel;
         /* set up gc for clearing using the foreground color entry */
         gcValues.foreground = gcValues.background = bground;
-        XChangeGC(XtDisplay(textD->w), gc,
-                GCFont | GCForeground | GCBackground, &gcValues);
+        #ifndef USE_XRENDER
+        XChangeGC(display, gc, GCFont | GCForeground | GCBackground, &gcValues);
+        #else
+        XChangeGC(display, gc, GCForeground | GCBackground, &gcValues);
+        #endif
+                
     }
 
     /* Draw blank area rather than text, if that was the request */
@@ -2033,15 +2091,49 @@ static void drawString(textDisp *textD, int style, int x, int y, int toX,
     	clearRect(textD, bgGC, x, y + textD->ascent + fs->descent, toX - x,
     		textD->descent - fs->descent);
 
+    #ifdef USE_XRENDER
+    if (gc != textD->styleGC) {
+        XGetGCValues(display, gc, GCForeground | GCBackground, &gcValues);
+    } else {
+        gcValues.foreground = fground;
+        gcValues.background = bground;
+    }
+	
+    clip.x = textD->left;
+    clip.y = y;
+    clip.width = textD->width;
+    clip.height = textD->ascent + textD->descent;
+    XftDrawSetClipRectangles(textD->xftDraw, 0, 0, &clip, 1);
+
+    xc.pixel = gcValues.foreground;
+    XQueryColor(display, TheColormap, &xc);
+
+    fg.pixel = xc.pixel;
+    fg.color.red = xc.red;
+    fg.color.green = xc.green;
+    fg.color.blue = xc.blue;
+	
+	xc.pixel = gcValues.background;
+    XQueryColor(display, TheColormap, &xc);
+
+    bg.pixel = xc.pixel;
+    bg.color.red = xc.red;
+    bg.color.green = xc.green;
+    bg.color.blue = xc.blue;
+    fg.color.alpha = bg.color.alpha = 0xffff;
+    
+	XftDrawRect(textD->xftDraw, &bg, x, y, toX - x, clip.height);
+    XftDrawString8(textD->xftDraw, &fg, fs->xft,
+        x, y + textD->ascent, string, nChars);
+    #else
     /* set up gc for writing text (set foreground properly) */
     if (bgGC == textD->styleGC) {
         gcValues.foreground = fground;
-        XChangeGC(XtDisplay(textD->w), gc, GCForeground, &gcValues);
+        XChangeGC(display, gc, GCForeground, &gcValues);
     }
 
-    /* Draw the string using gc and font set above */
-    XDrawImageString(XtDisplay(textD->w), XtWindow(textD->w), gc, x,
-    	    y + textD->ascent, string, nChars);
+    XDrawImageString(display, window, gc, x, y + textD->ascent, string, nChars);	
+    #endif /* USE_XRENDER */
     
     /* Underline if style is secondary selection */
     if (style & SECONDARY_MASK || underlineStyle)
@@ -2051,10 +2143,27 @@ static void drawString(textDisp *textD, int style, int x, int y, int toX,
         XChangeGC(XtDisplay(textD->w), gc,
                 GCForeground, &gcValues);
         /* draw underline */
-    	XDrawLine(XtDisplay(textD->w), XtWindow(textD->w), gc, x,
+    	XDrawLine(display, window, gc, x,
     	    	y + textD->ascent, toX - 1, y + textD->ascent);
     }
 }
+
+/*
+ * XTextWidth Xft shim
+ */
+int textWidth(FontStruct *fs, const char *string, int length)
+{
+    #ifdef USE_XRENDER
+    XGlyphInfo gi;
+
+    XftTextExtents8(TheDisplay, fs->xft, string, length, &gi);
+    return gi.xOff;
+
+    #else
+    return XTextWidth(fs, string, length);
+    #endif
+}
+
 
 /*
 ** Clear a rectangle with the appropriate background color for "style"
@@ -2204,13 +2313,13 @@ static int styleOfPos(textDisp *textD, int lineStartPos,
 static int stringWidth(const textDisp* textD, const char *string,
         int length, int style)
 {
-    XFontStruct *fs;
+    FontStruct *fs;
     
     if (style & STYLE_LOOKUP_MASK)
     	fs = textD->styleTable[(style & STYLE_LOOKUP_MASK) - ASCII_A].font;
     else 
     	fs = textD->fontStruct;
-    return XTextWidth(fs, (char*) string, (int) length);
+    return textWidth(fs, (char*) string, (int) length);
 }
 
 /*
@@ -2836,11 +2945,32 @@ static void redrawLineNumbers(textDisp *textD, int clearAll)
     int charWidth = textD->fontStruct->max_bounds.width;
     XRectangle clipRect;
     Display *display = XtDisplay(textD->w);
-    
+    Window wnd = XtWindow(textD->w);
+    #ifdef USE_XRENDER
+    XGCValues gcv;
+    XColor xc;
+    XftColor fg;
+    XGlyphInfo ext;
+    #endif /* USE_XRENDER */
+
     /* Don't draw if lineNumWidth == 0 (line numbers are hidden), or widget is
        not yet realized */
     if (textD->lineNumWidth == 0 || XtWindow(textD->w) == 0)
         return;
+
+    #ifdef USE_XRENDER
+	if(!textD->xftDraw) return;
+    XGetGCValues(display, textD->lineNumGC, GCForeground|GCBackground, &gcv);
+    xc.pixel = gcv.foreground;
+    XQueryColor(display, TheColormap, &xc);
+
+    fg.pixel = xc.pixel;
+    fg.color.red = xc.red;
+    fg.color.green = xc.green;
+    fg.color.blue = xc.blue;
+    fg.color.alpha = 0xffff;
+    #endif /* USE_XRENDER */
+
     
     /* Make sure we reset the clipping range for the line numbers GC, because
        the GC may be shared (eg, if the line numbers and text have the same
@@ -2849,12 +2979,16 @@ static void redrawLineNumbers(textDisp *textD, int clearAll)
     clipRect.y = textD->top;
     clipRect.width = textD->lineNumWidth;
     clipRect.height = textD->height;
+    #ifdef USE_XRENDER
+    XftDrawSetClipRectangles(textD->xftDraw, 0, 0, &clipRect, 1);
+    #else
     XSetClipRectangles(display, textD->lineNumGC, 0, 0,
     	    &clipRect, 1, Unsorted);
+    #endif /* USE_XRENDER */
     
     /* Erase the previous contents of the line number area, if requested */
     if (clearAll)
-        XClearArea(XtDisplay(textD->w), XtWindow(textD->w), textD->lineNumLeft,
+        XClearArea(display, wnd, textD->lineNumLeft,
                 textD->top, textD->lineNumWidth, textD->height, False);
     
     /* Draw the line numbers, aligned to the text */
@@ -2866,12 +3000,21 @@ static void redrawLineNumbers(textDisp *textD, int clearAll)
         if (lineStart != -1 && (lineStart==0 ||
                 BufGetCharacter(textD->buffer, lineStart-1)=='\n')) {
             sprintf(lineNumString, "%*d", nCols, line);
-            XDrawImageString(XtDisplay(textD->w), XtWindow(textD->w),
-                    textD->lineNumGC, textD->lineNumLeft, y + textD->ascent,
-                    lineNumString, strlen(lineNumString));
+            #ifdef USE_XRENDER
+            XClearArea(display, wnd, textD->lineNumLeft, y,
+                textD->lineNumWidth, textD->ascent + textD->descent, False);
+            XftDrawString8(textD->xftDraw, &fg, textD->fontStruct->xft,
+                textD->lineNumLeft, y + textD->ascent,
+                lineNumString, strlen(lineNumString));
+            #else
+            XDrawImageString(display, wnd, textD->lineNumGC,
+                textD->lineNumLeft, y + textD->ascent,
+                lineNumString, strlen(lineNumString));
+            #endif /* USE_XRENDER */
+            
             line++;
         } else {
-            XClearArea(XtDisplay(textD->w), XtWindow(textD->w),
+            XClearArea(display, wnd,
                     textD->lineNumLeft, y, textD->lineNumWidth,
                     textD->ascent + textD->descent, False);
             if (visLine == 0)
@@ -2951,7 +3094,7 @@ static int measureVisLine(textDisp *textD, int visLineNum)
 	for (i=0; i<lineLen; i++) {
     	    len = BufGetExpandedChar(textD->buffer, lineStartPos + i,
     		    charCount, expandedChar);
-    	    width += XTextWidth(textD->fontStruct, expandedChar, len);
+    	    width += textWidth(textD->fontStruct, expandedChar, len);
     	    charCount += len;
 	}
     } else {
@@ -2960,7 +3103,7 @@ static int measureVisLine(textDisp *textD, int visLineNum)
     		    charCount, expandedChar);
     	    style = (unsigned char)BufGetCharacter(textD->styleBuffer,
 		    lineStartPos+i) - ASCII_A;
-    	    width += XTextWidth(textD->styleTable[style].font, expandedChar,
+    	    width += textWidth(textD->styleTable[style].font, expandedChar,
     	    	    len);
     	    charCount += len;
 	}
@@ -3008,24 +3151,24 @@ static void blankCursorProtrusions(textDisp *textD)
 ** Allocate shared graphics contexts used by the widget, which must be
 ** re-allocated on a font change.
 */
-static void allocateFixedFontGCs(textDisp *textD, XFontStruct *fontStruct,
+static void allocateFixedFontGCs(textDisp *textD, FontStruct *fontStruct,
         Pixel bgPixel, Pixel fgPixel, Pixel selectFGPixel, Pixel selectBGPixel,
         Pixel highlightFGPixel, Pixel highlightBGPixel, Pixel lineNumFGPixel)
 {
     textD->gc = allocateGC(textD->w, GCFont | GCForeground | GCBackground,
-            fgPixel, bgPixel, fontStruct->fid, GCClipMask, GCArcMode); 
+            fgPixel, bgPixel, fontStruct, GCClipMask, GCArcMode); 
     textD->selectGC = allocateGC(textD->w, GCFont | GCForeground | GCBackground,
-            selectFGPixel, selectBGPixel, fontStruct->fid, GCClipMask,
+            selectFGPixel, selectBGPixel, fontStruct, GCClipMask,
             GCArcMode);
     textD->selectBGGC = allocateGC(textD->w, GCForeground, selectBGPixel, 0,
-            fontStruct->fid, GCClipMask, GCArcMode);
+            fontStruct, GCClipMask, GCArcMode);
     textD->highlightGC = allocateGC(textD->w, GCFont|GCForeground|GCBackground,
-            highlightFGPixel, highlightBGPixel, fontStruct->fid, GCClipMask,
+            highlightFGPixel, highlightBGPixel, fontStruct, GCClipMask,
             GCArcMode);
     textD->highlightBGGC = allocateGC(textD->w, GCForeground, highlightBGPixel,
-            0, fontStruct->fid, GCClipMask, GCArcMode);
+            0, fontStruct, GCClipMask, GCArcMode);
     textD->lineNumGC = allocateGC(textD->w, GCFont | GCForeground | 
-            GCBackground, lineNumFGPixel, bgPixel, fontStruct->fid, 
+            GCBackground, lineNumFGPixel, bgPixel, fontStruct, 
             GCClipMask, GCArcMode);
 }
 
@@ -3039,12 +3182,17 @@ static void allocateFixedFontGCs(textDisp *textD, XFontStruct *fontStruct,
 ** or XCreateGC on X11R4 systems where XtAllocateGC is not available.
 */
 static GC allocateGC(Widget w, unsigned long valueMask,
-	unsigned long foreground, unsigned long background, Font font,
+	unsigned long foreground, unsigned long background, FontStruct *font,
 	unsigned long dynamicMask, unsigned long dontCareMask)
 {
     XGCValues gcValues;
-
-    gcValues.font = font;
+	
+    #ifdef USE_XRENDER
+    valueMask &= (~GCFont);
+    #else
+    gcValues.font = font->fid;
+    #endif /* USE_XRENDER */
+	
     gcValues.background = background;
     gcValues.foreground = foreground;
 #if defined(XlibSpecificationRelease) && XlibSpecificationRelease > 4

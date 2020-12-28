@@ -112,7 +112,7 @@
 #define textCCursorVPadding "CursorVPadding"
 #define textNbacklightCharTypes "backlightCharTypes"
 #define textCBacklightCharTypes "BacklightCharTypes"
-
+#define textRFontStruct "textFontStruct"
 
 extern WidgetClass textWidgetClass;
 

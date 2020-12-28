@@ -1274,13 +1274,13 @@ static void convertPatternExpr(char **patternRE, char *patSetName,
 ** This routine must only be called with a valid styleName (call
 ** NamedStyleExists to find out whether styleName is valid).
 */
-XFontStruct *FontOfNamedStyle(WindowInfo *window, const char *styleName)
+FontStruct *FontOfNamedStyle(WindowInfo *window, const char *styleName)
 {
     int styleNo=lookupNamedStyle(styleName),fontNum;
-    XFontStruct *font;
+    FontStruct *font;
     
     if (styleNo<0)
-        return GetDefaultFontStruct(TheDisplay, window->fontList);
+        return window->primFontStruct;
     fontNum = HighlightStyles[styleNo]->font;
     if (fontNum == BOLD_FONT)
     	font = window->boldFontStruct;
@@ -1289,10 +1289,10 @@ XFontStruct *FontOfNamedStyle(WindowInfo *window, const char *styleName)
     else if (fontNum == BOLD_ITALIC_FONT)
     	font = window->boldItalicFontStruct;
     else /* fontNum == PLAIN_FONT */
-    	font = GetDefaultFontStruct(TheDisplay, window->fontList);
+    	font = window->primFontStruct;
     
     /* If font isn't loaded, silently substitute primary font */
-    return font == NULL ? GetDefaultFontStruct(TheDisplay, window->fontList) : font;
+    return font == NULL ? window->primFontStruct : font;
 }
 
 int FontOfNamedStyleIsBold(char *styleName)

@@ -27,6 +27,7 @@
 #ifndef NEDIT_TEXTDISP_H_INCLUDED
 #define NEDIT_TEXTDISP_H_INCLUDED
 
+#include "font.h"
 #include "textBuf.h"
 
 #include <X11/Intrinsic.h>
@@ -49,7 +50,7 @@ typedef struct {
     unsigned short blue;
     Pixel color;
     Boolean underline;
-    XFontStruct *font;
+    FontStruct *font;
     char *bgColorName;      /* background style coloring (name may be NULL) */
     unsigned short bgRed;
     unsigned short bgGreen;
@@ -122,7 +123,7 @@ typedef struct _textDisp {
     unfinishedStyleCBProc		/* Callback to parse "unfinished" */
     	    unfinishedHighlightCB;  	/*     regions */
     void *highlightCBArg;   	    	/* Arg to unfinishedHighlightCB */
-    XFontStruct *fontStruct;		/* Font structure for primary font */
+    FontStruct *fontStruct;		/* Font structure for primary font */
     int ascent, descent;		/* Composite ascent and descent for
     					   primary font + all-highlight fonts */
     int fixedFontWidth;			/* Font width if all current fonts are
@@ -160,12 +161,16 @@ typedef struct _textDisp {
     Boolean pointerHidden;              /* true if the mouse pointer is 
                                            hidden */
     graphicExposeTranslationEntry *graphicsExposeQueue;
+	
+#ifdef USE_XRENDER
+	XftDraw *xftDraw;
+#endif /* USE_XRENDER */
 } textDisp;
 
 textDisp *TextDCreate(Widget widget, Widget hScrollBar, Widget vScrollBar,
 	Position left, Position top, Position width, Position height,
 	Position lineNumLeft, Position lineNumWidth, textBuffer *buffer,
-	XFontStruct *fontStruct, Pixel bgPixel, Pixel fgPixel,
+	FontStruct *fontStruct, Pixel bgPixel, Pixel fgPixel,
 	Pixel selectFGPixel, Pixel selectBGPixel, Pixel highlightFGPixel,
 	Pixel highlightBGPixel, Pixel cursorFGPixel, Pixel lineNumFGPixel,
         int continuousWrap, int wrapMargin, XmString bgClassString, 
@@ -178,7 +183,7 @@ void TextDAttachHighlightData(textDisp *textD, textBuffer *styleBuffer,
 void TextDSetColors(textDisp *textD, Pixel textFgP, Pixel textBgP,
         Pixel selectFgP, Pixel selectBgP, Pixel hiliteFgP, Pixel hiliteBgP, 
         Pixel lineNoFgP, Pixel cursorFgP);
-void TextDSetFont(textDisp *textD, XFontStruct *fontStruct);
+void TextDSetFont(textDisp *textD, FontStruct *fontStruct);
 int TextDMinFontWidth(textDisp *textD, Boolean considerStyles);
 int TextDMaxFontWidth(textDisp *textD, Boolean considerStyles);
 void TextDResize(textDisp *textD, int width, int height);
