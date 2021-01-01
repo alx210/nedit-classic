@@ -199,6 +199,8 @@ static int updateLineNumDisp(WindowInfo* window);
 static int updateGutterWidth(WindowInfo* window);
 static void deleteDocument(WindowInfo *window);
 static void cancelTimeOut(XtIntervalId *timer);
+static Pixmap createCloseButtonPixmap(Widget w,
+	unsigned int size, unsigned int padding);
 
 /* From Xt, Shell.c, "BIGSIZE" */
 static const Dimension XT_IGNORE_PPOSITION = 32767;
@@ -448,15 +450,9 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
        Plus, if the user really wants traversal, it's an X resource so it
        can be enabled without too much pain and suffering. */
     
-    if (isrcFind == 0) {
-        isrcFind = createBitmapWithDepth(window->iSearchForm,
-                (char *)isrcFind_bits, isrcFind_width, isrcFind_height);
-    }
     window->iSearchFindButton = XtVaCreateManagedWidget("iSearchFindButton",
             xmPushButtonWidgetClass, window->iSearchForm,
             XmNlabelString, s1=XmStringCreateSimple("Find"),
-            XmNlabelType, XmPIXMAP,
-            XmNlabelPixmap, isrcFind,
             XmNtraversalOn, False,
             XmNmarginHeight, 1,
             XmNmarginWidth, 1,
@@ -514,15 +510,9 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
             NULL);
     XmStringFree(s1);
     
-    if (isrcClear == 0) {
-        isrcClear = createBitmapWithDepth(window->iSearchForm,
-                (char *)isrcClear_bits, isrcClear_width, isrcClear_height);
-    }
     window->iSearchClearButton = XtVaCreateManagedWidget("iSearchClearButton",
             xmPushButtonWidgetClass, window->iSearchForm,
-            XmNlabelString, s1=XmStringCreateSimple("<x"),
-            XmNlabelType, XmPIXMAP,
-            XmNlabelPixmap, isrcClear,
+            XmNlabelString, s1=XmStringCreateSimple("Clear"),
             XmNtraversalOn, False,
             XmNmarginHeight, 1,
             XmNmarginWidth, 1,
@@ -566,9 +556,14 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
 
     /* button to close top document */
     if (closeTabPixmap == 0) {
-        closeTabPixmap = createBitmapWithDepth(tabForm, 
-	        (char *)close_bits, close_width, close_height);
+        XmRenderTable rt;
+        unsigned int size, unused;
+
+        XtVaGetValues(window->iSearchFindButton, XmNrenderTable, &rt, NULL);
+        XmRenderTableGetDefaultFontExtents(rt, &size, &unused, &unused);
+        closeTabPixmap = createCloseButtonPixmap(tabForm, size, size / 4);
     }
+
     closeTabBtn = XtVaCreateManagedWidget("closeTabBtn",
       	    xmPushButtonWidgetClass, tabForm,
 	    XmNmarginHeight, 0,
@@ -585,7 +580,7 @@ WindowInfo *CreateWindow(const char *name, char *geometry, int iconic)
 	    NULL);
     XtAddCallback(closeTabBtn, XmNactivateCallback, (XtCallbackProc)closeTabCB, 
 	    mainWin);
-    
+
     /* create the tab bar */
     window->tabBar = XtVaCreateManagedWidget("tabBar", 
        	    xmlFolderWidgetClass, tabForm,
@@ -3006,6 +3001,45 @@ static Pixmap createBitmapWithDepth(Widget w, char *data, unsigned int width,
     pixmap = XCreatePixmapFromBitmapData(XtDisplay(w),
             RootWindowOfScreen(XtScreen(w)), (char *)data,
             width, height, fg, bg, depth);
+
+    return pixmap;
+}
+
+/* 
+** Create a square pixmap with an X symbol, padded on all sides as
+** specified by pad, drawn using w's fore and background colors.
+*/
+static Pixmap createCloseButtonPixmap(Widget w,
+	unsigned int size, unsigned int pad)
+{
+    Pixmap pixmap;
+    Pixel fg, bg;
+    int depth;
+    XGCValues gcv;
+    GC gc;
+    XSegment seg[2] = {
+	    { pad, pad, size - pad, size - pad},
+	    { size - pad, pad, pad, size - pad}
+    };
+
+    XtVaGetValues (w, XmNforeground, &fg, XmNbackground, &bg,
+	    XmNdepth, &depth, NULL);
+    pixmap = XCreatePixmap(XtDisplay(w),
+	     RootWindowOfScreen(XtScreen(w)), size, size, depth);
+
+    gcv.foreground = bg;
+    gcv.background = fg;
+    gcv.line_width = 2;
+    gcv.cap_style = CapProjecting;
+    gc = XtAllocateGC(w, depth,
+        GCForeground|GCBackground|GCLineWidth|GCCapStyle,
+        &gcv, GCForeground, 0);
+
+    XFillRectangle(XtDisplay(w), pixmap, gc, 0, 0, size, size);
+    XSetForeground(XtDisplay(w), gc, fg);
+    XDrawSegments(XtDisplay(w), pixmap, gc, seg, 2);
+
+    XtReleaseGC(w, gc);
 
     return pixmap;
 }
