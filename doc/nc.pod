@@ -12,7 +12,7 @@ nc [B<-read>] [B<-create>] [B<-line> I<n> | B<+>I<n>] [B<-do> I<command>]
    [B<-lm> I<languagemode>] 
    [B<-geometry> I<geometry> | B<-g> I<geometry>] [B<-icon> | B<-iconic>] 
    [B<-display> I<[host]:server[.screen]>] 
-   [B<-timeout> I<seconds>] [B<-wait>] [B<-xrm> I<resourcestring>] 
+   [B<-timeout> I<seconds>] [B<-xrm> I<resourcestring>] 
    [B<-tabbed>] [B<-untabbed>] [B<-group>] 
    [B<-V> | B<-version>] [B<-h> | B<-help>] [B<-->] [file...]
 
@@ -104,18 +104,6 @@ Default: 10 seconds. Also settable via the X resource `nc.timeOut'.
 
 Under rare conditions (such as a slow connection), it may be necessary to
 increase the time-out period. In most cases, the default is fine. 
-
-=item B<-wait>
-
-Instructs B<nc> not to return to the shell until all files given
-are closed.
-
-Normally, B<nc> returns once the files given in its command line
-are opened by the server. When this option is given, nc returns
-only after the last file given in this call is closed.
-Note that this option affects all files, not only the ones
-following this option in the command line.
-
 
 =item  B<-xrm> I<resourcestring> 
 

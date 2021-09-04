@@ -893,9 +893,6 @@ int SaveWindowAs(WindowInfo *window, const char *newName, int addWrap)
         }
     }
     
-    /* Destroy the file closed property for the original file */
-    DeleteFileClosedProperty(window);
-
     /* Change the name of the file and save it under the new name */
     RemoveBackupFile(window);
     strcpy(window->filename, filename);
