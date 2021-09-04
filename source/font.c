@@ -36,7 +36,7 @@ FontStruct* LoadFont(const char *fontName)
 	    XGlyphInfo ext;
 		int i;
 
-		 /* Loop trough ASCII printables and figure out minimum extents */
+		 /* Loop through ASCII printables and figure out minimum extents */
 		font->min_bounds.width = font->xft->max_advance_width;
 		for(i = 0; i < 93; i++ ) {
 			FT_UInt glyph = i + 33;
