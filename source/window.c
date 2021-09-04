@@ -973,9 +973,6 @@ void CloseWindow(WindowInfo *window)
        there can be more than one dialog. */
     RemoveFromMultiReplaceDialog(window);
     
-    /* Destroy the file closed property for this file */
-    DeleteFileClosedProperty(window);
-
     /* Remove any possibly pending callback which might fire after the 
        widget is gone. */
     cancelTimeOut(&window->flashTimeoutID);

@@ -133,19 +133,6 @@ static void cleanUpServerCommunication(void)
 {
     WindowInfo *w;
 
-    /* Delete any per-file properties that still exist
-     * (and that server knows about)
-     */
-    for (w = WindowList; w; w = w->next) {
-        DeleteFileClosedProperty(w);
-    }
-    
-    /* Delete any per-file properties that still exist
-     * (but that that server doesn't know about)
-     */
-    DeleteServerFileAtoms(GetPrefServerName(),
-                          RootWindow(TheDisplay, DefaultScreen(TheDisplay)));
-
     /* Delete the server-exists property from the root window (if it was
        assigned) and don't let the process exit until the X server has
        processed the delete request (otherwise it won't be done) */
@@ -209,83 +196,6 @@ Boolean ServerDispatchEvent(XEvent *event)
         }
     }
     return XtDispatchEvent(event);
-}
-
-/* Try to find existing 'FileOpen' property atom for path. */
-static Atom findFileOpenProperty(const char* filename,
-                                 const char* pathname) {
-    char path[MAXPATHLEN];
-    Atom atom;
-    
-    if (!IsServer) return(None);
-    
-    strcpy(path, pathname);
-    strcat(path, filename);
-    atom = CreateServerFileOpenAtom(GetPrefServerName(), path);
-    return(atom);
-}
-
-/* Destroy the 'FileOpen' atom to inform nc that this file has
-** been opened.
-*/
-static void deleteFileOpenProperty(WindowInfo *window)
-{
-    if (window->filenameSet) {
-        Atom atom = findFileOpenProperty(window->filename, window->path);
-        deleteProperty(&atom);
-    }
-}
-
-static void deleteFileOpenProperty2(const char* filename,
-                                    const char* pathname)
-{
-    Atom atom = findFileOpenProperty(filename, pathname);
-    deleteProperty(&atom);
-}
-
-
-
-/* Try to find existing 'FileClosed' property atom for path. */
-static Atom findFileClosedProperty(const char* filename,
-                                   const char* pathname)
-{
-    char path[MAXPATHLEN];
-    Atom atom;
-    
-    if (!IsServer) return(None);
-    
-    strcpy(path, pathname);
-    strcat(path, filename);
-    atom = CreateServerFileClosedAtom(GetPrefServerName(),
-                                      path,
-                                      True); /* don't create */
-    return(atom);
-}
-
-/* Get hold of the property to use when closing the file. */
-static void getFileClosedProperty(WindowInfo *window)
-{
-    if (window->filenameSet) {
-        window->fileClosedAtom = findFileClosedProperty(window->filename,
-                                                        window->path);
-    }
-}
-
-/* Delete the 'FileClosed' atom to inform nc that this file has
-** been closed.
-*/
-void DeleteFileClosedProperty(WindowInfo *window)
-{
-    if (window->filenameSet) {
-        deleteProperty(&window->fileClosedAtom);
-    }
-}
-
-static void deleteFileClosedProperty2(const char* filename,
-                                      const char* pathname)
-{
-    Atom atom = findFileClosedProperty(filename, pathname);
-    deleteProperty(&atom);
 }
 
 static int isLocatedOnDesktop(WindowInfo *window, long currentDesktop)
@@ -457,7 +367,6 @@ static void processServerCommandString(char *string)
 		(createFlag ? SUPPRESS_CREATE_WARN : 0);
 	if (ParseFilename(fullname, filename, pathname) != 0) {
 	   fprintf(stderr, "NEdit: invalid file name\n");
-           deleteFileClosedProperty2(filename, pathname);
 	   break;
 	}
 
@@ -487,9 +396,6 @@ static void processServerCommandString(char *string)
 	/* Do the actions requested (note DoMacro is last, since the do
 	   command can do anything, including closing the window!) */
 	if (window != NULL) {
-            deleteFileOpenProperty(window);
-            getFileClosedProperty(window);
-
 	    if (lineNum > 0)
 		SelectNumberedLine(window, lineNum);
 
@@ -522,10 +428,8 @@ static void processServerCommandString(char *string)
 	    	lastFile = window;
 		lastIconic = iconicFlag;
 	    }
-	} else {
-            deleteFileOpenProperty2(filename, pathname);
-            deleteFileClosedProperty2(filename, pathname);
-        }
+	}
+
     }
     
     /* Raise the last file opened */

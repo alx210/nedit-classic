@@ -100,8 +100,6 @@ static void waitUntilRequestProcessed(XtAppContext context,
                                       Window rootWindow,
                                       char* commandString,
                                       Atom serverRequestAtom);
-static void waitUntilFilesOpenedOrClosed(XtAppContext context,
-                                         Window rootWindow);
 
 Display *TheDisplay;
 XtAppContext AppContext;
@@ -128,7 +126,6 @@ static struct {
     int autoStart;
     char serverCmd[2*MAXPATHLEN]; /* holds executable name + flags */
     char serverName[MAXPATHLEN];
-    int waitForClose;
     int timeOut;
 } Preferences;
 
@@ -140,8 +137,6 @@ static PrefDescripRec PrefDescrip[] = {
       Preferences.serverCmd, (void *)sizeof(Preferences.serverCmd), False},
     {"serverName", "serverName", PREF_STRING, "", Preferences.serverName,
       (void *)sizeof(Preferences.serverName), False},
-    {"waitForClose", "WaitForClose", PREF_BOOLEAN, "False",
-      &Preferences.waitForClose, NULL, False},
     {"timeOut", "TimeOut", PREF_INT, "10",
       &Preferences.timeOut, NULL, False}
 };
@@ -152,21 +147,17 @@ static XrmOptionDescRec OpTable[] = {
     {"-noask", ".autoStart", XrmoptionNoArg, (caddr_t)"True"},
     {"-svrname", ".serverName", XrmoptionSepArg, (caddr_t)NULL},
     {"-svrcmd", ".serverCommand", XrmoptionSepArg, (caddr_t)NULL},
-    {"-wait", ".waitForClose", XrmoptionNoArg, (caddr_t)"True"},
     {"-timeout", ".timeOut", XrmoptionSepArg, (caddr_t)NULL}
 };
 
 /* Struct to hold info about files being opened and edited. */
 typedef struct _FileListEntry {
-    Atom                  waitForFileOpenAtom;
-    Atom                  waitForFileClosedAtom;
     char*                 path;
     struct _FileListEntry *next;
 } FileListEntry;
 
 typedef struct {
     int            waitForOpenCount;
-    int            waitForCloseCount;
     FileListEntry* fileList;
 } FileListHead;
 static FileListHead fileListHead;
@@ -193,34 +184,10 @@ static void addToFileList(const char *path)
     /* Add the atom to the head of the file list if it wasn't found. */
     if (item == 0) {
         item = malloc(sizeof(item[0]));
-        item->waitForFileOpenAtom = None;
-        item->waitForFileClosedAtom = None;
         item->path = (char*)malloc(strlen(path)+1);
         strcpy(item->path, path);
         item->next = fileListHead.fileList;
         fileListHead.fileList = item;
-    }
-}
-
-/* Creates the properties for the various paths */
-static void createWaitProperties(void)
-{
-    FileListEntry *item;
-
-    for (item = fileListHead.fileList; item; item = item->next) {
-        fileListHead.waitForOpenCount++;
-        item->waitForFileOpenAtom = 
-            CreateServerFileOpenAtom(Preferences.serverName, item->path);
-        setPropertyValue(item->waitForFileOpenAtom);
-
-        if (Preferences.waitForClose == True) {
-            fileListHead.waitForCloseCount++;
-            item->waitForFileClosedAtom =
-                      CreateServerFileClosedAtom(Preferences.serverName,
-                                                 item->path,
-                                                 False);
-            setPropertyValue(item->waitForFileClosedAtom);
-        }
     }
 }
 
@@ -290,9 +257,6 @@ int main(int argc, char **argv)
     }
 #endif /* VMS */
     
-    /* Create the wait properties for the various files. */
-    createWaitProperties();
-        
     /* Monitor the properties on the root window */
     XSelectInput(TheDisplay, rootWindow, PropertyChangeMask);
 	
@@ -312,8 +276,6 @@ int main(int argc, char **argv)
                               rootWindow,
                               commandLine.serverRequest,
                               serverRequestAtom);
-
-    waitUntilFilesOpenedOrClosed(context, rootWindow);
 
     XtCloseDisplay(TheDisplay);
     XtFree(commandLine.shell);
@@ -879,73 +841,6 @@ static void waitUntilRequestProcessed(XtAppContext context,
         exit(EXIT_FAILURE);
     } else {
         XtRemoveTimeOut(timerId);
-    }
-} 
-
-static void waitUntilFilesOpenedOrClosed(XtAppContext context,
-        Window rootWindow)
-{
-    XtIntervalId timerId;
-    Boolean timeOut = False;
-
-    /* Set up a timeout proc so we don't wait forever if the server is dead.
-       The standard selection timeout is probably a good guess at how
-       long to wait for this style of inter-client communication as
-       well */
-    timerId = XtAppAddTimeOut(context, FILE_OPEN_TIMEOUT, 
-                (XtTimerCallbackProc)timeOutProc, &timeOut);
-    currentWaitForAtom = noAtom;
-
-    /* Wait for all of the windows to be opened by server,
-     * and closed if -wait was supplied */
-    while (fileListHead.fileList) {
-        XEvent event;
-        const XPropertyEvent *e = (const XPropertyEvent *)&event;
-
-        XtAppNextEvent(context, &event);
-
-        /* Update the fileList and check if all files have been closed. */
-        if (e->type == PropertyNotify && e->window == rootWindow) {
-            FileListEntry *item;
-
-            if (e->state == PropertyDelete) {
-                for (item = fileListHead.fileList; item; item = item->next) {
-                    if (e->atom == item->waitForFileOpenAtom) {
-                        /* The 'waitForFileOpen' property is deleted when the file is opened */
-                        fileListHead.waitForOpenCount--;
-                        item->waitForFileOpenAtom = None;
-
-                        /* Reset the timer while we wait for all files to be opened. */
-                        XtRemoveTimeOut(timerId);
-                        timerId = XtAppAddTimeOut(context, FILE_OPEN_TIMEOUT, 
-                                    (XtTimerCallbackProc)timeOutProc, &timeOut);
-                    } else if (e->atom == item->waitForFileClosedAtom) {
-                        /* When file is opened in -wait mode the property
-                         * is deleted when the file is closed.
-                         */
-                        fileListHead.waitForCloseCount--;
-                        item->waitForFileClosedAtom = None;
-                    }
-                }
-                
-                if (fileListHead.waitForOpenCount == 0 && !timeOut) {
-                    XtRemoveTimeOut(timerId);
-                }
-
-                if (fileListHead.waitForOpenCount == 0 &&
-                    fileListHead.waitForCloseCount == 0) {
-                    break;
-                }
-            }
-        }
-
-        /* We are finished if we are only waiting for files to open and
-        ** the file open timeout has expired. */
-        if (!Preferences.waitForClose && timeOut) {
-           break;
-        }
-
-        XtDispatchEvent(&event);
     }
 } 
 
