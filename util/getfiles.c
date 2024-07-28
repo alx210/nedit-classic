@@ -111,7 +111,7 @@ static XmString DefaultPattern = NULL;
 /* User settable option for leaving the file name text field in
    GetExistingFilename dialogs.  Off by default so new users will get
    used to typing in the list rather than in the text field */
-static int RemoveRedundantTextField = True;
+static int RemoveRedundantTextField = False;
 
 /* Text for help button help display */
 /* ... needs variant for VMS */
