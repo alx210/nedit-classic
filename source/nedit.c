@@ -97,7 +97,6 @@ static void maskArgvKeywords(int argc, char **argv, const char **maskArgs);
 static void unmaskArgvKeywords(int argc, char **argv, const char **maskArgs);
 static void fixupBrokenXKeysymDB(void);
 static void patchResourcesForVisual(void);
-static void patchResourcesForKDEbug(void);
 static void patchLocaleForMotif(void);
 static unsigned char* sanitizeVirtualKeyBindings(void);
 static int sortAlphabetical(const void* k1, const void* k2);
@@ -169,12 +168,6 @@ static char *fallbackResources[] = {
     "*fixedRT.fontType:         FONT_IS_XFT",
     "*fixedRT.fontName:         Monospace",
     "*fixedRT.fontSize:         9",
-#elif LESSTIF_VERSION
-    "*FontList: "               NEDIT_DEFAULT_FONT,
-    "*XmText.FontList: "        NEDIT_FIXED_FONT,
-    "*XmTextField.FontList: "   NEDIT_FIXED_FONT,
-    "*XmList.FontList: "        NEDIT_FIXED_FONT,
-    "*XmFileSelectionBox*XmList.FontList: " 	 NEDIT_FIXED_FONT,
 #else
     "*buttonFontList: "         NEDIT_DEFAULT_FONT,
     "*labelFontList: "          NEDIT_DEFAULT_FONT,
@@ -189,10 +182,6 @@ static char *fallbackResources[] = {
     "*XmList.background: "      NEDIT_DEFAULT_TEXT_BG,
     "*XmTextField.foreground: " NEDIT_DEFAULT_FG,
     "*XmTextField.background: " NEDIT_DEFAULT_TEXT_BG,
-
-    /* Use baseTranslations as per Xt Programmer's Manual, 10.2.12 */
-    "*XmText.baseTranslations: " NEDIT_TEXT_TRANSLATIONS,
-    "*XmTextField.baseTranslations: " NEDIT_TEXT_TRANSLATIONS,
 
     "*XmLFolder.highlightThickness: 0",
     "*XmLFolder.shadowThickness:    1",
@@ -237,14 +226,6 @@ static char *fallbackResources[] = {
     "*calltip.background: LemonChiffon1",
     "*calltip.foreground: black",
     "*iSearchForm*highlightThickness: 1",
-    "*fileMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*editMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*searchMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*preferencesMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*windowsMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*shellMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*macroMenu.tearOffModel: XmTEAR_OFF_ENABLED",
-    "*helpMenu.tearOffModel: XmTEAR_OFF_ENABLED",
     "*fileMenu.mnemonic: F",
     "*fileMenu.new.accelerator: Ctrl<Key>n",
     "*fileMenu.new.acceleratorText: Ctrl+N",
@@ -506,7 +487,6 @@ int main(int argc, char **argv)
     /* Must be done before creating widgets */
     fixupBrokenXKeysymDB();
     patchResourcesForVisual();
-    patchResourcesForKDEbug();
     
     /* Initialize global symbols and subroutines used in the macro language */
     InitMacroGlobals();
@@ -997,83 +977,6 @@ static void patchResourcesForVisual(void)
 }
 
 /*
-** Several KDE version (2.x and 3.x) ship with a template application-default 
-** file for NEdit in which several strings have to be substituted in order to 
-** make it a valid .ad file. However, for some reason (a KDE bug?), the
-** template sometimes ends up in the resource db unmodified, such that several
-** invalid entries are present. This function checks for the presence of such
-** invalid entries and silently replaces them with NEdit's default values where
-** necessary. Without this, NEdit will typically write several warnings to 
-** the terminal (Cannot convert string "FONTLIST" to type FontStruct etc) and
-** fall back on some really ugly colors and fonts.
-*/
-static void patchResourcesForKDEbug(void)
-{
-    /*
-     * These are the resources found the Nedit.ad template shipped with KDE 3.0.
-     */
-    static const char* buggyResources[][3] = { 
-     { "*fontList",               "FONTLIST",          NEDIT_DEFAULT_FONT     }, 
-     { "*XmText.background",      "BACKGROUND",        NEDIT_DEFAULT_TEXT_BG  }, 
-     { "*XmText.foreground",      "FOREGROUND",        NEDIT_DEFAULT_FG       }, 
-     { "*XmTextField.background", "BACKGROUND",        NEDIT_DEFAULT_TEXT_BG  }, 
-     { "*XmTextField.foreground", "FOREGROUND",        NEDIT_DEFAULT_FG       }, 
-     { "*XmList.background",      "BACKGROUND",        NEDIT_DEFAULT_TEXT_BG  }, 
-     { "*XmList.foreground",      "FOREGROUND",        NEDIT_DEFAULT_FG       }, 
-     { "*helpText.background",    "BACKGROUND",        NEDIT_DEFAULT_HELP_BG  },
-     { "*helpText.foreground",    "FOREGROUND",        NEDIT_DEFAULT_HELP_FG  },
-     { "*background",             "BACKGROUND",        NEDIT_DEFAULT_BG       },
-     { "*foreground",             "FOREGROUND",        NEDIT_DEFAULT_FG,      },
-     { "*selectColor",            "BACKGROUND",        NEDIT_DEFAULT_SEL_BG   },
-     { "*highlightColor",         "BACKGROUND",        NEDIT_DEFAULT_HI_BG    },
-     { "*text.background",        "WINDOW_BACKGROUND", NEDIT_DEFAULT_TEXT_BG  },
-     { "*text.foreground",        "WINDOW_FOREGROUND", NEDIT_DEFAULT_FG       },
-     { "*text.selectBackground",  "SELECT_BACKGROUND", NEDIT_DEFAULT_SEL_BG   },
-     { "*text.selectForeground",  "SELECT_FOREGROUND", NEDIT_DEFAULT_SEL_FG   },
-     { "*text.cursorForeground",  "WINDOW_FOREGROUND", NEDIT_DEFAULT_CURSOR_FG},
-  /* { "*remapDeleteKey",         "False",                                    }, OK */
-  /* { "!*text.heavyCursor",      "True"                                      }, OK */
-  /* { "!*BlinkRate",             "0"                                         }, OK */
-  /* { "*shell",                  "/bin/sh"                                   }, OK */
-     { "*statsLine.background",   "BACKGROUND",        NEDIT_DEFAULT_BG       },
-     { "*statsLine.foreground",   "FOREGROUND",        NEDIT_DEFAULT_FG       },
-     { NULL,                      NULL,                NULL                   } };
-    XrmDatabase db;
-    int i;
-    
-    if (!TheDisplay)
-        return;
-
-    db = XtDatabase(TheDisplay);
-    
-    i = 0;
-    while (buggyResources[i][0])
-    {
-        const char* resource = buggyResources[i][0];
-        const char* buggyValue = buggyResources[i][1];
-        const char* defaultValue = buggyResources[i][2];
-        char name[128] = APP_NAME;
-        char class[128] = APP_CLASS;
-        char* type;
-        XrmValue resValue;
-        
-        strcat(name, resource);
-        strcat(class, resource); /* Is this ok ? */
-        
-        if (XrmGetResource(db, name, class, &type, &resValue) &&
-            !strcmp(type, XmRString))
-        {
-            /* Buggy value? Replace by the default. */
-            if (!strcmp(resValue.addr, buggyValue))
-            {
-                XrmPutStringResource(&db, &name[0], (char*)defaultValue);
-            }
-        }    
-        ++i;
-    }
-}
-
-/*
 ** It seems OSF Motif cannot handle locales with UTF-8 at the end, crashing
 ** in various places.  The easiest one to find is to open the File Open
 ** dialog box.  So we lop off UTF-8 if it's there and continue.  Newer 
@@ -1306,29 +1209,6 @@ static void restoreInsaneVirtualKeyBindings(unsigned char *insaneVirtKeyBindings
 */
 static void showWarningFilter(String message)
 {
-  const char* bogusMessages[] = {
-#ifdef LESSTIF_VERSION
-    "XmFontListCreate() is an obsolete function!",
-    "No type converter registered for 'String' to 'PathMode' conversion.",
-    "XtRemoveGrab asked to remove a widget not on the list",
-#endif
-    NULL 
-  };
-  const char **bogusMessage = &bogusMessages[0]; 
-  
-  while (*bogusMessage) {
-      size_t bogusLen = strlen(*bogusMessage);
-      if (strncmp(message, *bogusMessage, bogusLen) == 0) {
-#ifdef DEBUG_LESSTIF_WARNINGS
-         /* Developers may want to see which messages are suppressed. */
-         fprintf(stderr, "[SUPPRESSED] %s\n", message);
-#endif        
-         return;
-      }
-      ++bogusMessage;
-  }
-  
-  /* An unknown message. Keep it. */
   fprintf(stderr, "%s\n", message);
 }
 
