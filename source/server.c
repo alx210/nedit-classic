@@ -66,6 +66,7 @@
 
 #include <Xm/Xm.h>
 #include <Xm/XmP.h>
+#include <Xm/MwmUtil.h>
 
 #ifdef HAVE_DEBUG_H
 #include "../debug.h"
@@ -198,10 +199,97 @@ Boolean ServerDispatchEvent(XEvent *event)
     return XtDispatchEvent(event);
 }
 
+/* 
+ * Checks whether the shell is in the active MWM workspace.
+ * This is here because EWMH doesn't account for the case that a client
+ * is in multiple (but not all) workspaces.
+ */
+static Boolean IsInActiveMwmWorkspace(Widget wshell)
+{
+	Display *dpy = XtDisplay(wshell);
+	Window client = XtWindow(wshell);
+	static Atom xaPresence = (Atom) -1;
+	static Atom xaWsCurrent;
+	static Atom xaInfo;
+	Atom activeWorkspace = None;
+	Boolean result = False;
+	
+	if(xaPresence == (Atom) -1) {
+		xaPresence = XInternAtom(dpy, "_MWM_WORKSPACE_PRESENCE", True);
+		xaWsCurrent = XInternAtom(dpy, "_MWM_WORKSPACE_CURRENT", True);
+		xaInfo = XInternAtom(dpy, "_MOTIF_WM_INFO", True);
+	}
+
+	if(xaWsCurrent != None) {
+		Atom retType;
+		int retFormat;
+		unsigned long retItems;
+		unsigned long leftItems;
+		PropMotifWmInfo *info;
+		Atom *data;
+		Window mwmWindow;
+				
+		if(XGetWindowProperty(dpy, DefaultRootWindow(dpy), xaInfo, 0,
+			PROP_MOTIF_WM_INFO_ELEMENTS, False,
+			xaInfo, &retType, &retFormat, &retItems, &leftItems,
+			(unsigned char**)&info) != Success) return False;
+
+		if(retType == xaInfo) mwmWindow = info->wmWindow;
+
+		XFree(info);
+
+		if(XGetWindowProperty(dpy, mwmWindow,
+			xaWsCurrent, 0, 1, False, XA_ATOM, &retType,
+			&retFormat, &retItems, &leftItems,
+			(unsigned char**)&data) != Success) return False;
+
+		if(retType == XA_ATOM) activeWorkspace = *data;
+		
+		XFree(data);
+	}
+
+    if(xaPresence != None && activeWorkspace != None)
+    {
+		Atom *IDs;
+		unsigned long nIDs = 255;
+		Atom actualType;
+		int actualFormat;
+		unsigned long leftover = 0;
+		int i;
+		
+		/* in case the window was just created, give
+		 * the WM some time to update the property */
+		usleep(50000);
+		
+		if(XGetWindowProperty(dpy, client,
+			xaPresence, 0, nIDs, False, xaPresence,
+			&actualType, &actualFormat, &nIDs, &leftover,
+			(unsigned char **)&IDs) != Success) return False;
+		
+		if( (actualType != xaPresence) || (actualFormat != 32) || leftover) {
+			XFree(IDs);
+			return False;
+		}
+		
+		for(i = 0; i < nIDs; i++) {
+			if(IDs[i] == activeWorkspace) {
+				result = True;
+				break;
+			}
+		}
+
+		XFree(IDs);
+    }
+    return result;
+}
+
 static int isLocatedOnDesktop(WindowInfo *window, long currentDesktop)
 {
     long windowDesktop;
-    if (currentDesktop == -1)
+	
+	if (IsInActiveMwmWorkspace(window->shell)) return True;
+	
+	if (currentDesktop == -1)
         return True; /* No desktop information available */
     
     windowDesktop = QueryDesktop(TheDisplay, window->shell);
